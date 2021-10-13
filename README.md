@@ -14,6 +14,17 @@ You need to create a file called `TOKEN` in this folder with your bot token in. 
 
 You will also need to change the "guild" option in the config in index.js to your server id. (server switcher coming soon)
 
+## Notes
+
+CTRL+C is your "back button". Use it to get out of the chat.
+
+## Features
+
+- Automatic role, channel, user, and emoji parsing.
+- Proxy so it's unblocked.
+- Runs in command line so it's light.
+- Channel selector.
+
 ## FAQ
 
 How do i host this?

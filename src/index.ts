@@ -1,6 +1,5 @@
 import fs from "fs";
 import rl from "readline";
-import chalk from "chalk";
 import io from "socket.io-client";
 import mic from "mic";
 
@@ -108,7 +107,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
       socket.on("messageUpdate", async (message) => {
         if (!message.content || !message.guild) return;
         await fetchMessages(message.channel.id);
-        if (id == message.channel.id && pageNum == 3) loadPage(3);
+        if (channelman.channel.id == message.channel.id && pageNum == 3) loadPage(3);
       });
     });
 

@@ -11234,8 +11234,6 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
       socket.on("messageCreate", async (message) => {
         if (!message.content || !message.guild)
           return;
-        console.log(message);
-        process.exit();
         let ind = serverman.server.channels.indexOf(serverman.server.channels.find((c) => c.id == message.channel.id));
         serverman.server.channels[ind].messages.push(message);
         if (message.author.id == bot.id)

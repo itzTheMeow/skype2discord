@@ -124,6 +124,8 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
     let fetched = [];
     let scrollPos = 0;
     let chatHigh = null;
+    let hadMessage = false;
+    let typing = false;
 
     const pages = [
       {
@@ -242,7 +244,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
           let maxChatLines = termSize().rows - 4;
           console.log("TOP");
 
-          if (!fetched.includes(channel.id)) {
+          if (!fetched.includes(channel?.id)) {
             showLoader();
             await fetchMessages(channel.id);
             stopLoader();
@@ -285,10 +287,15 @@ ${"—".repeat(termSize().columns)}
             if (k == "08") chatMessage = chatMessage.substr(0, chatMessage.length - 1);
             else if (k == "1a") chatMessage = history.pop();
             else if (k == "0d" && chatMessage) {
-              if (chatMessage.trim()) socket.emit("sendMessage", channel.id, chatMessage);
+              if (chatMessage.trim()) {
+                if (chatMessage.startsWith("/nick ")) {
+                  socket.emit("setNick", chatMessage.substring("/nick ".length));
+                } else socket.emit("sendMessage", channel.id, chatMessage);
+              }
               chatMessage = "";
               lastMessage = history.pop();
               history = [];
+              typing = false;
             } else if (k == "16") {
               history.push(chatMessage);
               chatMessage += clipboard
@@ -299,6 +306,20 @@ ${"—".repeat(termSize().columns)}
             } else if (Object.keys(config.keymap).includes(k)) {
               history.push(chatMessage);
               chatMessage += config.keymap[k];
+            }
+
+            if (chatMessage) {
+              if (!hadMessage) {
+                hadMessage = true;
+                typing = true;
+                socket.emit("type", channel.id);
+              }
+            } else {
+              hadMessage = false;
+              if (typing) {
+                typing = false;
+                socket.emit("stopType", channel.id);
+              }
             }
           }
           loadPage(3);

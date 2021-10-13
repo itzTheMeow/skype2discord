@@ -22,6 +22,7 @@ let clients = {};
 io.on("connection", (socket) => {
   console.log("Socket connected!");
   socket.on("login", (d) => {
+    let guild;
     let bot = new Discord.Client({
       intents: Object.values(Discord.Intents.FLAGS), // fuck you discord lmao
     });
@@ -38,6 +39,7 @@ io.on("connection", (socket) => {
 
     let fetchedAuthors = [];
     bot.on("messageCreate", async (message) => {
+      if (message.content == "$TDSClient.stopTypingEventTrigger") return;
       let json = message.toJSON();
       if (!fetchedAuthors.includes(message.author.id)) {
         await message.author.fetch();
@@ -50,6 +52,7 @@ io.on("connection", (socket) => {
       socket.emit("messageCreate", json);
     });
     bot.on("messageUpdate", async (message) => {
+      if (message.content == "$TDSClient.stopTypingEventTrigger") return;
       let json = message.toJSON();
       if (!fetchedAuthors.includes(message.author.id)) {
         await message.author.fetch();
@@ -74,6 +77,7 @@ io.on("connection", (socket) => {
           return json;
         });
       socket.emit("doneguild", json);
+      guild = g;
     });
 
     let fetched = [];
@@ -110,6 +114,15 @@ io.on("connection", (socket) => {
 
     socket.on("sendMessage", (id, content) => {
       bot.channels.cache.get(id)?.send(content);
+    });
+    socket.on("setNick", (name) => {
+      guild.me.setNickname(name);
+    });
+    socket.on("type", (id) => {
+      bot.channels.cache.get(id)?.sendTyping();
+    });
+    socket.on("stopType", async (id) => {
+      (await bot.channels.cache.get(id)?.send("$TDSClient.stopTypingEventTrigger"))?.delete();
     });
 
     socket.on("joinVoice", (id) => {

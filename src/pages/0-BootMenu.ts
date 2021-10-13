@@ -1,3 +1,5 @@
+import chalk from "chalk";
+import { outdated } from "..";
 import config from "../config";
 import { loadPage, setHexMode } from "../loadPage";
 
@@ -9,6 +11,9 @@ const page0 = {
   title: `Boot Menu - ${config.productName}`,
   onload: () => {
     setHexMode(false);
+    if (outdated) {
+      console.log(chalk.redBright("Outdated client! Please update."));
+    }
   },
   keyPress: (k: string) => {
     switch (k) {

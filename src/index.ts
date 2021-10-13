@@ -1,7 +1,7 @@
 import fs from "fs";
 import rl from "readline";
 import io from "socket.io-client";
-import mic from "mic";
+import fetch from "node-fetch";
 
 import setTitle from "./util/setTitle";
 import config from "./config";
@@ -22,12 +22,14 @@ console.log("Booting...");
 
 const TOKEN = String(fs.readFileSync("TOKEN"));
 const PROXY = String(fs.readFileSync("PROXY"));
+const VERSION = Number(String(fs.readFileSync("VERSION")));
 let serverman = new ServerManager();
 let channelman = new ChannelManager();
 let messageman = new ChatMessageManager();
 let scrollman = new ScrollManager();
 let historyman = new HistoryManager();
 let socketman = new SocketManager();
+let outdated = false;
 
 setTitle("Logging in...");
 let inter = rl.createInterface({ input: process.stdin, output: process.stdout });
@@ -50,78 +52,89 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
     console.log("Socket disconnected... Reload client!");
   });
 
-  socket.once("connect", () => {
+  socket.once("connect", async () => {
     setTitle("Connected!");
     console.clear();
     console.log("Connected to proxy server.");
 
     process.stdin.setMaxListeners(Infinity);
 
-    let hexKey = "";
+    console.log("Checking for updates...");
+    fetch("https://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION")
+      .then(async (hasVersion) => {
+        if (VERSION < Number(await hasVersion.text())) outdated = true;
 
-    socket.on("botready", (bot) => {
-      console.log(`${bot.tag} is online!`);
-      console.log("Getting main guild...");
-      socket.emit("guild", config.guild);
+        let hexKey = "";
 
-      socket.once("doneguild", (s) => {
-        serverman.data(s);
+        socket.on("botready", (bot) => {
+          console.log(`${bot.tag} is online!`);
+          console.log("Getting main guild...");
+          socket.emit("guild", config.guild);
 
-        process.stdin.on("keypress", (k) => {
-          if (!hexMode) {
-            press(k);
-            hexKey = "";
-            return;
-          }
-          hexKey += k;
-          if (hexKey.length >= 2) {
-            if (
-              (hexKey.startsWith("1b") || hexKey.startsWith("1b5") || hexKey.startsWith("1b5b")) &&
-              !hexKey.endsWith("7e") &&
-              !hexKey.endsWith("41") &&
-              !hexKey.endsWith("42") &&
-              !hexKey.endsWith("43") &&
-              !hexKey.endsWith("44") &&
-              hexKey.length < 8
-            )
-              return;
-            press(hexKey);
-            hexKey = "";
-          }
+          socket.once("doneguild", (s) => {
+            serverman.data(s);
+
+            process.stdin.on("keypress", (k) => {
+              if (!hexMode) {
+                press(k);
+                hexKey = "";
+                return;
+              }
+              hexKey += k;
+              if (hexKey.length >= 2) {
+                if (
+                  (hexKey.startsWith("1b") ||
+                    hexKey.startsWith("1b5") ||
+                    hexKey.startsWith("1b5b")) &&
+                  !hexKey.endsWith("7e") &&
+                  !hexKey.endsWith("41") &&
+                  !hexKey.endsWith("42") &&
+                  !hexKey.endsWith("43") &&
+                  !hexKey.endsWith("44") &&
+                  hexKey.length < 8
+                )
+                  return;
+                press(hexKey);
+                hexKey = "";
+              }
+            });
+
+            loadPage(0);
+          });
+
+          socket.on("messageCreate", async (message) => {
+            if (!message.content || !message.guild) return;
+            let ind = serverman.server.channels.indexOf(
+              serverman.server.channels.find((c) => c.id == message.channel.id)
+            );
+            (serverman.server.channels[ind] as TextChannel).messages.push(message);
+            if (message.author.id == bot.id) scrollman.reset();
+            loadPage(3);
+
+            if (message.author.bot || !message.content.startsWith(config.prefix)) return;
+
+            let args = message.content.substring(config.prefix.length).split(" ");
+            let command = args.shift();
+
+            switch (command) {
+              case "xd":
+                socket.emit("sendMessage", message.channel.id, "xd");
+                break;
+            }
+          });
+          socket.on("messageUpdate", async (message) => {
+            if (!message.content || !message.guild) return;
+            await fetchMessages(message.channel.id);
+            if (channelman.channel.id == message.channel.id && pageNum == 3) loadPage(3);
+          });
         });
 
-        loadPage(0);
+        console.log("Logging in...");
+        socket.emit("login", TOKEN);
+      })
+      .catch(() => {
+        console.log("Failed version check.");
       });
-
-      socket.on("messageCreate", async (message) => {
-        if (!message.content || !message.guild) return;
-        let ind = serverman.server.channels.indexOf(
-          serverman.server.channels.find((c) => c.id == message.channel.id)
-        );
-        (serverman.server.channels[ind] as TextChannel).messages.push(message);
-        if (message.author.id == bot.id) scrollman.reset();
-        loadPage(3);
-
-        if (message.author.bot || !message.content.startsWith(config.prefix)) return;
-
-        let args = message.content.substring(config.prefix.length).split(" ");
-        let command = args.shift();
-
-        switch (command) {
-          case "xd":
-            socket.emit("sendMessage", message.channel.id, "xd");
-            break;
-        }
-      });
-      socket.on("messageUpdate", async (message) => {
-        if (!message.content || !message.guild) return;
-        await fetchMessages(message.channel.id);
-        if (channelman.channel.id == message.channel.id && pageNum == 3) loadPage(3);
-      });
-    });
-
-    console.log("Logging in...");
-    socket.emit("login", TOKEN);
   });
 
   process.stdin.setRawMode(true);
@@ -129,4 +142,4 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
   process.stdin.resume();
 });
 
-export { serverman, channelman, messageman, scrollman, historyman, socketman };
+export { serverman, channelman, messageman, scrollman, historyman, socketman, outdated };

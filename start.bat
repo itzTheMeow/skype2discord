@@ -1,1 +1,1 @@
-START node/node.exe index.js
+START node/node.exe --no-warnings index.js

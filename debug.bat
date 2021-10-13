@@ -1,3 +1,3 @@
 cd node
-node ../index.js
+node --no-warnings ../index.js
 pause

@@ -50,6 +50,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
     loadPage(0);
     console.clear();
     console.log("Socket disconnected... Reload client!");
+    socket.close();
   });
 
   socket.once("connect", async () => {
@@ -60,7 +61,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
     process.stdin.setMaxListeners(Infinity);
 
     console.log("Checking for updates...");
-    fetch("https://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION")
+    fetch("http://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION")
       .then(async (hasVersion) => {
         if (VERSION < Number(await hasVersion.text())) outdated = true;
 
@@ -103,7 +104,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
           });
 
           socket.on("messageCreate", async (message) => {
-            if (!message.content || !message.guild) return;
+            if (!message.content || !message.guild || !serverman.server?.channels) return;
             let ind = serverman.server.channels.indexOf(
               serverman.server.channels.find((c) => c.id == message.channel.id)
             );
@@ -134,7 +135,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
       })
       .catch((err) => {
         console.log("Failed version check.");
-        console.log(err)
+        console.log(err);
       });
   });
 

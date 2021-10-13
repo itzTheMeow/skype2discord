@@ -15899,6 +15899,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
     loadPage(0);
     console.clear();
     console.log("Socket disconnected... Reload client!");
+    socket.close();
   });
   socket.once("connect", async () => {
     setTitle("Connected!");
@@ -15906,7 +15907,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
     console.log("Connected to proxy server.");
     process.stdin.setMaxListeners(Infinity);
     console.log("Checking for updates...");
-    fetch("https://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION").then(async (hasVersion) => {
+    fetch("http://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION").then(async (hasVersion) => {
       if (VERSION < Number(await hasVersion.text()))
         outdated = true;
       let hexKey = "";
@@ -15933,7 +15934,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
           loadPage(0);
         });
         socket.on("messageCreate", async (message) => {
-          if (!message.content || !message.guild)
+          if (!message.content || !message.guild || !serverman.server?.channels)
             return;
           let ind = serverman.server.channels.indexOf(serverman.server.channels.find((c) => c.id == message.channel.id));
           serverman.server.channels[ind].messages.push(message);

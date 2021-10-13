@@ -83,11 +83,11 @@ io.on("connection", (socket) => {
       if (!channel) return;
       let messages = channel.messages?.cache || [];
       if (!fetched.includes(channel?.id)) {
-        await channel.messages.fetch({
+        await channel.messages?.fetch({
           limit: 100,
           before: channel.messages.cache?.last()?.id,
         });
-        await channel.messages.fetch({
+        await channel.messages?.fetch({
           limit: 100,
           before: channel.messages.cache?.last()?.id,
         });

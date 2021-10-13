@@ -18,6 +18,8 @@ You need to create a file called `TOKEN` in this folder with your bot token in. 
 
 You will also need to change the "guild" option in the config in index.js to your server id. (server switcher coming soon)
 
+Your bot will need at least send messages and webhook permissions. This uses webhooks to send messages as apparently sending messages through the bot is against tos but webhooks arent.
+
 ## Notes
 
 CTRL+C is your "back button". Use it to get out of the chat.

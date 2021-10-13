@@ -9,6 +9,27 @@ type ChannelTypes =
   | "GUILD_PRIVATE_THREAD"
   | "GUILD_STAGE_VOICE";
 
+export interface User {
+  id: string;
+  bot: boolean;
+  system: boolean;
+  flags: number;
+  username: string;
+  discriminator: string;
+  avatar: any;
+  banner: any;
+  accentColor: any;
+  verified: boolean;
+  mfaEnabled: boolean;
+  createdTimestamp: number;
+  defaultAvatarURL: string;
+  hexAccentColor: any;
+  tag: string;
+  avatarURL: string | null;
+  displayAvatarURL: string | null;
+  bannerURL: string | null;
+}
+
 export interface Member {
   guildId: string;
   joinedTimestamp: number;
@@ -55,6 +76,7 @@ export interface Message {
   attachments: Attachment[];
   stickers: any[];
   editedTimestamp: number | null;
+  editedAt: number | null;
   webhookId: any;
   groupActivityApplicationId: any;
   applicationId: any;
@@ -63,26 +85,7 @@ export interface Message {
   reference: any;
   interaction: any;
   cleanContent: string;
-  author: {
-    id: "887041717692411916";
-    bot: true;
-    system: false;
-    flags: 0;
-    username: "Disbridge";
-    discriminator: "8329";
-    avatar: null;
-    banner: null;
-    accentColor: null;
-    verified: true;
-    mfaEnabled: false;
-    createdTimestamp: 1631557625936;
-    defaultAvatarURL: "https://cdn.discordapp.com/embed/avatars/4.png";
-    hexAccentColor: null;
-    tag: "Disbridge#8329";
-    avatarURL: null;
-    displayAvatarURL: "https://cdn.discordapp.com/embed/avatars/4.png";
-    bannerURL: null;
-  };
+  author: User;
   channel: TextChannel;
   guild: Server;
   member: Member;

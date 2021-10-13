@@ -9,6 +9,7 @@ import config from "../config";
 import { chatDisabled } from "../util/chatDisabled";
 import parse from "../util/parse";
 import fetchMessages from "../util/fetchMessages";
+import { TextChannel } from "../Discord";
 
 let fetched = [];
 let chatHigh = null;
@@ -34,8 +35,8 @@ const page3 = {
       stopLoader();
       fetched.push(channelman.channel.id);
     }
-    console.log(channelman.channel.messages[0].content);
-    let msgs = channelman.channel.messages
+    console.log((channelman.channel as TextChannel).messages[0].content);
+    let msgs = (channelman.channel as TextChannel).messages
       .filter((m) => m.content)
       .sort((m1, m2) => {
         return m1.createdTimestamp > m2.createdTimestamp ? 1 : -1;

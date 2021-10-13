@@ -19,7 +19,7 @@ const DiscordVoice = require("@discordjs/voice");
 
 let clients = {};
 
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("Socket connected!");
   socket.on("login", (d) => {
     let guild;
@@ -33,6 +33,28 @@ io.on("connection", (socket) => {
     bot.login(d);
     clients[socket.id] = bot;
 
+    let sendHook;
+    async function getSendHook(ch) {
+      if (!sendHook || sendHook.deleted)
+        sendHook =
+          (await guild.fetchWebhooks()).find((w) => w.owner.id == bot.user.id) ||
+          (await ch.createWebhook("TDSClient"));
+
+      await sendHook.edit({
+        name: bot.user.username,
+        avatar: bot.user.displayAvatarURL(),
+        channel: ch.id,
+      });
+      return sendHook;
+    }
+    async function sendMessage(id, content) {
+      let channel = bot.channels.cache.get(id);
+      if (!channel) return;
+      let hook = await getSendHook(channel, channel.guild.me.displayName);
+      hook.send(content);
+      (await channel.send("$TDSClient.stopTypingEventTrigger")).delete();
+    }
+
     socket.on("disconnect", () => {
       bot.destroy();
     });
@@ -41,11 +63,22 @@ io.on("connection", (socket) => {
     bot.on("messageCreate", async (message) => {
       if (message.content == "$TDSClient.stopTypingEventTrigger") return;
       let json = message.toJSON();
-      if (!fetchedAuthors.includes(message.author.id)) {
-        await message.author.fetch();
-        fetchedAuthors.push(message.author.id);
+      if (message.author.discriminator !== "0000") {
+        if (!fetchedAuthors.includes(message.author.id)) {
+          await message.author.fetch();
+          fetchedAuthors.push(message.author.id);
+        }
+        json.author = message.author.toJSON();
+      } else {
+        json.author = json.member = {
+          ...message.author,
+          ...{
+            tag: message.author.username,
+            nickname: message.author.username,
+            displayName: message.author.username,
+          },
+        };
       }
-      json.author = message.author.toJSON();
       json.channel = message.channel.toJSON();
       if (message.attachments) json.attachments = message.attachments.map((a) => a.toJSON());
       if (message.guild) json.guild = message.guild.toJSON();
@@ -55,11 +88,22 @@ io.on("connection", (socket) => {
     bot.on("messageUpdate", async (message) => {
       if (message.content == "$TDSClient.stopTypingEventTrigger") return;
       let json = message.toJSON();
-      if (!fetchedAuthors.includes(message.author.id)) {
-        await message.author.fetch();
-        fetchedAuthors.push(message.author.id);
+      if (message.author.discriminator !== "0000") {
+        if (!fetchedAuthors.includes(message.author.id)) {
+          await message.author.fetch();
+          fetchedAuthors.push(message.author.id);
+        }
+        json.author = message.author.toJSON();
+      } else {
+        json.author = json.member = {
+          ...message.author,
+          ...{
+            tag: message.author.username,
+            nickname: message.author.username,
+            displayName: message.author.username,
+          },
+        };
       }
-      json.author = message.author.toJSON();
       json.channel = message.channel.toJSON();
       if (message.attachments) json.attachments = message.attachments.map((a) => a.toJSON());
       if (message.guild) json.guild = message.guild.toJSON();
@@ -119,8 +163,8 @@ io.on("connection", (socket) => {
       );
     });
 
-    socket.on("sendMessage", (id, content) => {
-      bot.channels.cache.get(id)?.send(content);
+    socket.on("sendMessage", async (id, content) => {
+      sendMessage(id, content);
     });
     socket.on("setNick", (name) => {
       guild.me.setNickname(name);

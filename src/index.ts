@@ -44,7 +44,13 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
   console.log(`Connecting to ${proxyUrl}...`);
   setTitle("Connecting...");
 
-  socket.on("connect", () => {
+  socket.on("disconnect", () => {
+    loadPage(0);
+    console.clear();
+    console.log("Socket disconnected... Reload client!");
+  });
+
+  socket.once("connect", () => {
     setTitle("Connected!");
     console.clear();
     console.log("Connected to proxy server.");

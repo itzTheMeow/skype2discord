@@ -24,6 +24,7 @@ CTRL+C is your "back button". Use it to get out of the chat.
 - Proxy so it's unblocked.
 - Runs in command line so it's light.
 - Channel selector.
+- /nick command to set nickname.
 
 ## FAQ
 

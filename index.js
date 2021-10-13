@@ -15960,8 +15960,9 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
       });
       console.log("Logging in...");
       socket.emit("login", TOKEN);
-    }).catch(() => {
+    }).catch((err) => {
       console.log("Failed version check.");
+      console.log(err);
     });
   });
   process.stdin.setRawMode(true);

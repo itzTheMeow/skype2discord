@@ -132,8 +132,9 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
         console.log("Logging in...");
         socket.emit("login", TOKEN);
       })
-      .catch(() => {
+      .catch((err) => {
         console.log("Failed version check.");
+        console.log(err)
       });
   });
 

@@ -3,6 +3,7 @@ console.log("Booting...");
 
 const config = {
   prefix: "v!",
+  guild: "832290972880470117",
   productName: "TDSClient",
   keyListMap: "123456789abcdefghijklmnopqrstuvwxyz".split(""),
   qwerty:
@@ -235,7 +236,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
         onload: async () => {
           process.stdin.setEncoding("hex");
           hexMode = true;
-          setTitle(`#${channel.name} - ${config.productName}`);
+          setTitle(`#${channel?.name || "unknown"} - ${config.productName}`);
 
           let chatLines = [];
           let maxChatLines = termSize().rows - 4;
@@ -320,7 +321,7 @@ ${"—".repeat(termSize().columns)}
     socket.on("botready", (bot) => {
       console.log(`${bot.tag} is online!`);
       console.log("Getting main guild...");
-      socket.emit("guild", "832290972880470117");
+      socket.emit("guild", config.guild);
 
       socket.once("doneguild", (s) => {
         server = s;

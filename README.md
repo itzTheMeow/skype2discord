@@ -12,6 +12,8 @@ You do not need to install anything or have administrator access in order to use
 
 You need to create a file called `TOKEN` in this folder with your bot token in. You also need a file called `PROXY` with the URL of your proxy server. The client will prompt you for a URL every time you start it, if it needs to be changed.
 
+You will also need to change the "guild" option in the config in index.js to your server id. (server switcher coming soon)
+
 ## FAQ
 
 How do i host this?

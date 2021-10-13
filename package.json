@@ -4,14 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node ."
+    "start": "npm run build && node .",
+    "build": "esbuild src/index.js --bundle --outfile=index.js --platform=node"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/socket.io-client": "^3.0.0",
     "chalk": "^4.1.2",
     "clipboardy": "^2.3.0",
+    "esbuild": "^0.13.5",
     "keypress": "^0.2.1",
     "mic": "^2.1.2",
     "socket.io-client": "^4.2.0",

@@ -27,3 +27,8 @@ What systems does this work on?
 Are you hosting a public proxy?
 
 - No, it would be too much of a hassle for me to update the url (as mine constantly changes).
+
+## Images
+
+![image](https://user-images.githubusercontent.com/50887230/137150913-f3fa8f08-632a-4a7a-94e8-f2f063608c76.png)
+![image](https://user-images.githubusercontent.com/50887230/137151282-f1b462af-93d6-4d0e-8be9-08ce24596023.png)

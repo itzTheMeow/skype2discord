@@ -15,6 +15,8 @@ import SocketManager from "./managers/SocketManager";
 import fetchMessages from "./util/fetchMessages";
 import { TextChannel } from "./Discord";
 
+if (process.cwd().endsWith("node")) process.chdir("../");
+
 console.clear();
 console.log("Booting...");
 

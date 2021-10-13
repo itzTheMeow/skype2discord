@@ -11180,6 +11180,8 @@ var SocketManager = class {
 };
 
 // src/index.ts
+if (process.cwd().endsWith("node"))
+  process.chdir("../");
 console.clear();
 console.log("Booting...");
 var TOKEN = String(import_fs.default.readFileSync("TOKEN"));

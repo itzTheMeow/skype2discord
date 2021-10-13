@@ -1,2 +1,3 @@
-START node/node.exe index.js
+cd node
+node ../index.js
 pause

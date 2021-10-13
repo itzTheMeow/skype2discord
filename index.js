@@ -15952,7 +15952,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
           }
         });
         socket.on("messageUpdate", async (message) => {
-          if (!message.content || !message.guild)
+          if (!message.content || !message.guild || !serverman.server?.channels)
             return;
           await fetchMessages(message.channel.id);
           if (channelman.channel.id == message.channel.id && pageNum == 3)

@@ -14,6 +14,7 @@ const config = {
     user: /<@!?(\d{17,19})>/g,
     role: /<@&(\d{17,19})>/g,
     channel: /<#(\d{17,19})>/g,
+    emoji: /<a?:(.*):(\d{17,19})>/g,
   },
 };
 
@@ -158,6 +159,18 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
         doRoleMention();
       }
       doRoleMention();
+      function doEmojiMention() {
+        let mention = cont.match(config.mentionPatterns.emoji);
+        if (!mention) return;
+        mention = mention[0];
+        let id = mention.slice(1, -1);
+        if (id.startsWith("a")) id = id.substring(1);
+        id = id.substring(1);
+        id = id.split(":")[0];
+        cont = cont.replace(new RegExp(mention, "g"), chalk.magentaBright(`:${id}:`));
+        doEmojiMention();
+      }
+      doEmojiMention();
 
       return cont;
     }

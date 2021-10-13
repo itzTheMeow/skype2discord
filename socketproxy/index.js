@@ -67,6 +67,8 @@ io.on("connection", (socket) => {
 
     socket.on("guild", async (id) => {
       let g = bot.guilds.cache.get(id);
+      await g.members.fetch();
+      await g.roles.fetch();
       let json = g.toJSON();
       json.channels = g.channels.cache
         .filter((c) => c.permissionsFor(c.guild.me).has("VIEW_CHANNEL"))
@@ -76,6 +78,8 @@ io.on("connection", (socket) => {
           if (c.parent) json.parent = c.parent.toJSON();
           return json;
         });
+      json.members = g.members.cache.map((m) => m.toJSON());
+      json.roles = g.roles.cache.map((r) => r.toJSON());
       socket.emit("doneguild", json);
       guild = g;
     });

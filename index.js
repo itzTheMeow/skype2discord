@@ -10,6 +10,11 @@ const config = {
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+={[}]|\\\"':;<,>.?/~`\n ",
   keymap: require("./keymap.json") || {},
   loading: [".  ", ".. ", "...", " ..", "  .", " ..", "...", ".. "],
+  mentionPatterns: {
+    user: /<@!?(\d{17,19})>/g,
+    role: /<@&(\d{17,19})>/g,
+    channel: /<#(\d{17,19})>/g,
+  },
 };
 
 const fs = require("fs");
@@ -104,7 +109,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
     }
 
     function parse(content) {
-      return [...content]
+      let cont = [...content]
         .map((c) => (config.qwerty.includes(c) ? c : "?"))
         .join("")
         .replace(/\*\*\*(.*)\*\*\*/gim, chalk.bold.italic("$1"))
@@ -112,6 +117,49 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
         .replace(/\*(.*)\*/gim, chalk.italic("$1"))
         .replace(/\_\_(.*)\_\_/gim, chalk.underline("$1"))
         .replace(/\~\~(.*)\~\~/gim, chalk.strikethrough("$1"));
+
+      function doUserMention() {
+        let mention = cont.match(config.mentionPatterns.user);
+        if (!mention) return;
+        mention = mention[0];
+        let id = mention.slice(2, -1);
+        if (id.startsWith("!")) id = id.substring(1);
+        let mem = server.members.find((m) => m.userId == id);
+        cont = cont.replace(
+          new RegExp(mention, "g"),
+          chalk.blueBright(`@${mem?.displayName || "Unknown"}`)
+        );
+        doUserMention();
+      }
+      doUserMention();
+      function doChannelMention() {
+        let mention = cont.match(config.mentionPatterns.channel);
+        if (!mention) return;
+        mention = mention[0];
+        let id = mention.slice(2, -1);
+        let ch = server.channels.find((c) => c.id == id);
+        cont = cont.replace(
+          new RegExp(mention, "g"),
+          chalk.blueBright(`#${ch?.name || "unknown"}`)
+        );
+        doChannelMention();
+      }
+      doChannelMention();
+      function doRoleMention() {
+        let mention = cont.match(config.mentionPatterns.role);
+        if (!mention) return;
+        mention = mention[0];
+        let id = mention.slice(3, -1);
+        let role = server.roles.find((r) => r.id == id);
+        cont = cont.replace(
+          new RegExp(mention, "g"),
+          chalk.blueBright(`@${role?.name || "Unknown"}`)
+        );
+        doRoleMention();
+      }
+      doRoleMention();
+
+      return cont;
     }
 
     let ciMap = {};
@@ -361,7 +409,8 @@ ${"—".repeat(termSize().columns)}
               !hexKey.endsWith("41") &&
               !hexKey.endsWith("42") &&
               !hexKey.endsWith("43") &&
-              !hexKey.endsWith("44")
+              !hexKey.endsWith("44") &&
+              hexKey.length < 8
             )
               return;
             press(hexKey);

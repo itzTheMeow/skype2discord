@@ -13,6 +13,7 @@ import HistoryManager from "./managers/HistoryManager";
 import ChatMessageManager from "./managers/ChatMessageManager";
 import SocketManager from "./managers/SocketManager";
 import fetchMessages from "./util/fetchMessages";
+import { TextChannel } from "./Discord";
 
 console.clear();
 console.log("Booting...");
@@ -89,7 +90,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
         let ind = serverman.server.channels.indexOf(
           serverman.server.channels.find((c) => c.id == message.channel.id)
         );
-        serverman.server.channels[ind].messages.push(message);
+        (serverman.server.channels[ind] as TextChannel).messages.push(message);
         if (message.author.id == bot.id) scrollman.reset();
         loadPage(3);
 

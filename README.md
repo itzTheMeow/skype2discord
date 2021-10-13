@@ -4,6 +4,10 @@ If you want to use discord on your school computer without it being blocked, thi
 
 This client utilizes a BOT TOKEN (get it from a friend or on another pc) and connects using a proxy.
 
+**THIS IS NOT A SELFBOT! THIS USES A BOT TOKEN WHICH IS NOT AGAINST TOS**
+
+**USER TOKENS ARE AGAINST TOS, NOT SUPPORTED, AND WILL CAUSE ISSUES**
+
 The only URLs you need access to are `github.com` (to download this), and the URL where you host the proxy at. I would recommend [glitch](https://glitch.com) for hosting it as its free and should be unblocked.
 
 You do not need to install anything or have administrator access in order to use this tool. A node.js binary is already included. The modules are also preinstalled.

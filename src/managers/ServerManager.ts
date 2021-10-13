@@ -1,4 +1,4 @@
-type Server = any;
+import { Server } from "../Discord";
 
 export default class ServerManager {
   public server: Server;

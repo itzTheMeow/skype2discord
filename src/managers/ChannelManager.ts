@@ -1,4 +1,4 @@
-type Channel = any;
+import { Channel } from "../Discord";
 
 export default class ChannelManager {
   public channel: Channel;

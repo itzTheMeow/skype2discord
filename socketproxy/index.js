@@ -47,6 +47,7 @@ io.on("connection", (socket) => {
       }
       json.author = message.author.toJSON();
       json.channel = message.channel.toJSON();
+      if (message.attachments) json.attachments = message.attachments.map((a) => a.toJSON());
       if (message.guild) json.guild = message.guild.toJSON();
       if (message.member) json.member = message.member.toJSON();
       socket.emit("messageCreate", json);
@@ -60,6 +61,7 @@ io.on("connection", (socket) => {
       }
       json.author = message.author.toJSON();
       json.channel = message.channel.toJSON();
+      if (message.attachments) json.attachments = message.attachments.map((a) => a.toJSON());
       if (message.guild) json.guild = message.guild.toJSON();
       if (message.member) json.member = message.member.toJSON();
       socket.emit("messageUpdate", json);
@@ -110,6 +112,7 @@ io.on("connection", (socket) => {
             username: msg.author.username,
             tag: msg.author.tag,
           };
+          if (msg.attachments) json.attachments = msg.attachments.map((a) => a.toJSON());
           if (msg.member) json.member = msg.member.toJSON();
           return json;
         })

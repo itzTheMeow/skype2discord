@@ -2,6 +2,7 @@ import page0 from "./pages/0-BootMenu";
 import page1 from "./pages/1-HexCodes";
 import page2 from "./pages/2-ChannelList";
 import page3 from "./pages/3-Chat";
+import page4 from "./pages/4-Voice";
 import setTitle from "./util/setTitle";
 
 type page = {
@@ -11,7 +12,7 @@ type page = {
   keyPress: Function;
 };
 
-let pages: page[] = [page0, page1, page2, page3];
+let pages: page[] = [page0, page1, page2, page3, page4];
 let hexMode = false;
 let pageNum = 0;
 let press: Function;

@@ -15,6 +15,7 @@ import ChatMessageManager from "./managers/ChatMessageManager";
 import SocketManager from "./managers/SocketManager";
 import fetchMessages from "./util/fetchMessages";
 import { TextChannel } from "./Discord";
+import MicManager from "./managers/MicManager";
 
 if (process.cwd().endsWith("node")) process.chdir("../");
 
@@ -30,6 +31,7 @@ let messageman = new ChatMessageManager();
 let scrollman = new ScrollManager();
 let historyman = new HistoryManager();
 let socketman = new SocketManager();
+let micman = new MicManager();
 let outdated = false;
 
 setTitle("Logging in...");
@@ -152,4 +154,4 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
   process.stdin.resume();
 });
 
-export { serverman, channelman, messageman, scrollman, historyman, socketman, outdated };
+export { serverman, channelman, messageman, scrollman, historyman, socketman, micman, outdated };

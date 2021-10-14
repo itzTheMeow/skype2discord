@@ -1,10 +1,11 @@
-import { channelman, historyman, messageman, scrollman, serverman, socketman } from "..";
+import { channelman, historyman, messageman, micman, scrollman, serverman, socketman } from "..";
 import config from "../config";
 import { loadPage } from "../loadPage";
 import { disableChat } from "../util/chatDisabled";
 import fs from "fs";
 import mic from "mic";
 import socketstream from "socket.io-stream";
+import { showLoader, stopLoader } from "../util/loader";
 
 let ciMap = {};
 
@@ -54,26 +55,28 @@ const page2 = {
     if (ciMap[k]) {
       channelman.data(serverman.server.channels.find((c) => c.id == ciMap[k]));
       if (channelman.channel.type == "voice") {
+        showLoader();
         socketman.socket.emit("joinVoice", channelman.channel.id);
         socketman.socket.once("joinedVoice", () => {
-          let micInstance = mic({
-            rate: "16000",
-            channels: "1",
-            debug: true,
-            exitOnSilence: 6,
-            fileType: "raw",
-          });
-          let micInputStream = micInstance.getAudioStream();
-          let voiceStream = socketstream.createStream({});
+          if (!micman.started) {
+            let micInstance = mic({
+              rate: "16000",
+              channels: "1",
+              exitOnSilence: Infinity,
+              fileType: "raw",
+            });
+            let micInputStream = micInstance.getAudioStream();
+            let voiceStream = socketstream.createStream({});
 
-          micInputStream.pipe(voiceStream);
-          socketstream(socketman.socket, {}).emit("voiceStream", voiceStream);
+            micInputStream.pipe(voiceStream);
+            socketstream(socketman.socket, {}).emit("voiceStream", voiceStream);
 
-          micInputStream.on("processExitComplete", function () {
-            console.log("Got SIGNAL processExitComplete");
-          });
+            micInstance.start();
+            micman.setMic(micInstance, micInputStream);
+          }
 
-          micInstance.start();
+          stopLoader();
+          loadPage(4);
         });
       } else {
         if (!channelman.channel.canSend) {

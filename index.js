@@ -15320,6 +15320,7 @@ __export(exports, {
   channelman: () => channelman,
   historyman: () => historyman,
   messageman: () => messageman,
+  micman: () => micman,
   outdated: () => outdated,
   scrollman: () => scrollman,
   serverman: () => serverman,
@@ -16467,6 +16468,49 @@ function disableChat(val) {
 // src/pages/2-ChannelList.ts
 var import_mic = __toModule(require_mic2());
 var import_socket = __toModule(require_socket4());
+
+// src/util/termSize.ts
+var create = (columns, rows) => ({
+  columns: Number.parseInt(columns, 10),
+  rows: Number.parseInt(rows, 10)
+});
+function termSize() {
+  const { env, stdout, stderr } = process;
+  if (stdout && stdout.columns && stdout.rows) {
+    return create(stdout.columns, stdout.rows);
+  }
+  if (stderr && stderr.columns && stderr.rows) {
+    return create(stderr.columns, stderr.rows);
+  }
+  if (env.COLUMNS && env.LINES) {
+    return create(env.COLUMNS, env.LINES);
+  }
+  return create(80, 24);
+}
+
+// src/util/loader.ts
+var loader;
+function showLoader() {
+  if (loader)
+    clearInterval(loader);
+  let loadNum = 0;
+  loader = setInterval(() => {
+    let loading = config_default.loading[loadNum];
+    let padTop = (" ".repeat(termSize().columns) + "\n").repeat(Math.floor(termSize().rows / 2) - 2);
+    let padLeft = " ".repeat(Math.ceil((termSize().columns - loading.length / 2) / 2) + 2);
+    process.stdout.write(`${padTop}
+${padLeft}${loading}${padTop}`);
+    loadNum++;
+    if (loadNum == config_default.loading.length)
+      loadNum = 0;
+  }, 200);
+}
+function stopLoader() {
+  if (loader)
+    clearInterval(loader);
+}
+
+// src/pages/2-ChannelList.ts
 var ciMap = {};
 var page2 = {
   text: `Press a key to view/join a channel below.
@@ -16509,23 +16553,25 @@ ${category}`);
     if (ciMap[k]) {
       channelman.data(serverman.server.channels.find((c) => c.id == ciMap[k]));
       if (channelman.channel.type == "voice") {
+        showLoader();
         socketman.socket.emit("joinVoice", channelman.channel.id);
         socketman.socket.once("joinedVoice", () => {
-          let micInstance = (0, import_mic.default)({
-            rate: "16000",
-            channels: "1",
-            debug: true,
-            exitOnSilence: 6,
-            fileType: "raw"
-          });
-          let micInputStream = micInstance.getAudioStream();
-          let voiceStream = import_socket.default.createStream({});
-          micInputStream.pipe(voiceStream);
-          (0, import_socket.default)(socketman.socket, {}).emit("voiceStream", voiceStream);
-          micInputStream.on("processExitComplete", function() {
-            console.log("Got SIGNAL processExitComplete");
-          });
-          micInstance.start();
+          if (!micman.started) {
+            let micInstance = (0, import_mic.default)({
+              rate: "16000",
+              channels: "1",
+              exitOnSilence: Infinity,
+              fileType: "raw"
+            });
+            let micInputStream = micInstance.getAudioStream();
+            let voiceStream = import_socket.default.createStream({});
+            micInputStream.pipe(voiceStream);
+            (0, import_socket.default)(socketman.socket, {}).emit("voiceStream", voiceStream);
+            micInstance.start();
+            micman.setMic(micInstance, micInputStream);
+          }
+          stopLoader();
+          loadPage(4);
         });
       } else {
         if (!channelman.channel.canSend) {
@@ -16643,47 +16689,6 @@ var keymap = {
   "7e": "~"
 };
 var keymap_default = keymap;
-
-// src/util/termSize.ts
-var create = (columns, rows) => ({
-  columns: Number.parseInt(columns, 10),
-  rows: Number.parseInt(rows, 10)
-});
-function termSize() {
-  const { env, stdout, stderr } = process;
-  if (stdout && stdout.columns && stdout.rows) {
-    return create(stdout.columns, stdout.rows);
-  }
-  if (stderr && stderr.columns && stderr.rows) {
-    return create(stderr.columns, stderr.rows);
-  }
-  if (env.COLUMNS && env.LINES) {
-    return create(env.COLUMNS, env.LINES);
-  }
-  return create(80, 24);
-}
-
-// src/util/loader.ts
-var loader;
-function showLoader() {
-  if (loader)
-    clearInterval(loader);
-  let loadNum = 0;
-  loader = setInterval(() => {
-    let loading = config_default.loading[loadNum];
-    let padTop = (" ".repeat(termSize().columns) + "\n").repeat(Math.floor(termSize().rows / 2) - 2);
-    let padLeft = " ".repeat(Math.ceil((termSize().columns - loading.length / 2) / 2) + 2);
-    process.stdout.write(`${padTop}
-${padLeft}${loading}${padTop}`);
-    loadNum++;
-    if (loadNum == config_default.loading.length)
-      loadNum = 0;
-  }, 200);
-}
-function stopLoader() {
-  if (loader)
-    clearInterval(loader);
-}
 
 // src/pages/3-Chat.ts
 var import_clipboardy = __toModule(require_clipboardy());
@@ -16859,8 +16864,29 @@ ${"\u2014".repeat(termSize().columns)}
 };
 var Chat_default = page3;
 
+// src/pages/4-Voice.ts
+var page4 = {
+  text: "",
+  title: "",
+  onload: async () => {
+    process.stdin.setEncoding("hex");
+    setHexMode(true);
+    setTitle(`VC: ${channelman.channel.name || "unknown"} - ${config_default.productName}`);
+    if (!micman.started) {
+      console.log("MicManager not started! CTRL+C and rejoin channel.");
+    } else {
+      let chan = channelman.channel;
+    }
+  },
+  keyPress: (k) => {
+    if (k == "03")
+      return loadPage(2);
+  }
+};
+var Voice_default = page4;
+
 // src/loadPage.ts
-var pages = [BootMenu_default, HexCodes_default, ChannelList_default, Chat_default];
+var pages = [BootMenu_default, HexCodes_default, ChannelList_default, Chat_default, Voice_default];
 var hexMode = false;
 var pageNum = 0;
 var press;
@@ -16949,6 +16975,23 @@ var SocketManager = class {
   }
 };
 
+// src/managers/MicManager.ts
+var MicManager = class {
+  constructor() {
+    this.started = false;
+  }
+  setMic(inst, str) {
+    this.instance = inst;
+    this.inputStream = str;
+    this.started = true;
+    let mm = this;
+    this.inputStream.on("stopComplete", function() {
+      this.onComplete();
+      mm.started = false;
+    });
+  }
+};
+
 // src/index.ts
 if (process.cwd().endsWith("node"))
   process.chdir("../");
@@ -16963,6 +17006,7 @@ var messageman = new ChatMessageManager();
 var scrollman = new ScrollManager();
 var historyman = new HistoryManager();
 var socketman = new SocketManager();
+var micman = new MicManager();
 var outdated = false;
 setTitle("Logging in...");
 var inter = import_readline.default.createInterface({ input: process.stdin, output: process.stdout });
@@ -17063,6 +17107,7 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
   channelman,
   historyman,
   messageman,
+  micman,
   outdated,
   scrollman,
   serverman,

@@ -171,10 +171,11 @@ io.on("connection", async (socket) => {
       guild.me.setNickname(name);
     });
     socket.on("type", (id) => {
-      bot.channels.cache.get(id)?.sendTyping();
+      if (bot.channels.cache.get(id)?.type != "voice") bot.channels.cache.get(id)?.sendTyping();
     });
     socket.on("stopType", async (id) => {
-      (await bot.channels.cache.get(id)?.send("$TDSClient.stopTypingEventTrigger"))?.delete();
+      if (bot.channels.cache.get(id)?.type != "voice")
+        (await bot.channels.cache.get(id)?.send("$TDSClient.stopTypingEventTrigger"))?.delete();
     });
 
     socket.on("joinVoice", async (id) => {

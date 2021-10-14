@@ -11024,6 +11024,1067 @@ var require_source = __commonJS({
   }
 });
 
+// node_modules/mic/lib/silenceTransform.js
+var require_silenceTransform = __commonJS({
+  "node_modules/mic/lib/silenceTransform.js"(exports, module2) {
+    var Transform = require("stream").Transform;
+    var util = require("util");
+    function IsSilence(options) {
+      var that = this;
+      if (options && options.debug) {
+        that.debug = options.debug;
+        delete options.debug;
+      }
+      Transform.call(that, options);
+      var consecSilenceCount = 0;
+      var numSilenceFramesExitThresh = 0;
+      that.getNumSilenceFramesExitThresh = function getNumSilenceFramesExitThresh() {
+        return numSilenceFramesExitThresh;
+      };
+      that.getConsecSilenceCount = function getConsecSilenceCount() {
+        return consecSilenceCount;
+      };
+      that.setNumSilenceFramesExitThresh = function setNumSilenceFramesExitThresh(numFrames) {
+        numSilenceFramesExitThresh = numFrames;
+        return;
+      };
+      that.incrConsecSilenceCount = function incrConsecSilenceCount() {
+        consecSilenceCount++;
+        return consecSilenceCount;
+      };
+      that.resetConsecSilenceCount = function resetConsecSilenceCount() {
+        consecSilenceCount = 0;
+        return;
+      };
+    }
+    util.inherits(IsSilence, Transform);
+    IsSilence.prototype._transform = function(chunk, encoding, callback) {
+      var i;
+      var speechSample;
+      var silenceLength = 0;
+      var self2 = this;
+      var debug = self2.debug;
+      var consecutiveSilence = self2.getConsecSilenceCount();
+      var numSilenceFramesExitThresh = self2.getNumSilenceFramesExitThresh();
+      var incrementConsecSilence = self2.incrConsecSilenceCount;
+      var resetConsecSilence = self2.resetConsecSilenceCount;
+      if (numSilenceFramesExitThresh) {
+        for (i = 0; i < chunk.length; i = i + 2) {
+          if (chunk[i + 1] > 128) {
+            speechSample = (chunk[i + 1] - 256) * 256;
+          } else {
+            speechSample = chunk[i + 1] * 256;
+          }
+          speechSample += chunk[i];
+          if (Math.abs(speechSample) > 2e3) {
+            if (debug) {
+              console.log("Found speech block");
+            }
+            resetConsecSilence();
+            break;
+          } else {
+            silenceLength++;
+          }
+        }
+        if (silenceLength == chunk.length / 2) {
+          consecutiveSilence = incrementConsecSilence();
+          if (debug) {
+            console.log("Found silence block: %d of %d", consecutiveSilence, numSilenceFramesExitThresh);
+          }
+          if (consecutiveSilence === numSilenceFramesExitThresh) {
+            self2.emit("silence");
+          }
+        }
+      }
+      this.push(chunk);
+      callback();
+    };
+    module2.exports = IsSilence;
+  }
+});
+
+// node_modules/mic/lib/mic.js
+var require_mic = __commonJS({
+  "node_modules/mic/lib/mic.js"(exports, module2) {
+    var spawn = require("child_process").spawn;
+    var isMac = require("os").type() == "Darwin";
+    var isWindows = require("os").type().indexOf("Windows") > -1;
+    var IsSilence = require_silenceTransform();
+    var PassThrough3 = require("stream").PassThrough;
+    var mic2 = function mic3(options) {
+      options = options || {};
+      var that = {};
+      var endian = options.endian || "little";
+      var bitwidth = options.bitwidth || "16";
+      var encoding = options.encoding || "signed-integer";
+      var rate = options.rate || "16000";
+      var channels = options.channels || "1";
+      var device = options.device || "plughw:1,0";
+      var exitOnSilence = options.exitOnSilence || 0;
+      var fileType = options.fileType || "raw";
+      var debug = options.debug || false;
+      var format, formatEndian, formatEncoding;
+      var audioProcess = null;
+      var infoStream = new PassThrough3();
+      var audioStream = new IsSilence({ debug });
+      var audioProcessOptions = {
+        stdio: ["ignore", "pipe", "ignore"]
+      };
+      if (debug) {
+        audioProcessOptions.stdio[2] = "pipe";
+      }
+      if (endian === "big") {
+        formatEndian = "BE";
+      } else {
+        formatEndian = "LE";
+      }
+      if (encoding === "unsigned-integer") {
+        formatEncoding = "U";
+      } else {
+        formatEncoding = "S";
+      }
+      format = formatEncoding + bitwidth + "_" + formatEndian;
+      audioStream.setNumSilenceFramesExitThresh(parseInt(exitOnSilence, 10));
+      that.start = function start() {
+        if (audioProcess === null) {
+          if (isWindows) {
+            audioProcess = spawn("sox", [
+              "-b",
+              bitwidth,
+              "--endian",
+              endian,
+              "-c",
+              channels,
+              "-r",
+              rate,
+              "-e",
+              encoding,
+              "-t",
+              "waveaudio",
+              "default",
+              "-p"
+            ], audioProcessOptions);
+          } else if (isMac) {
+            audioProcess = spawn("rec", [
+              "-b",
+              bitwidth,
+              "--endian",
+              endian,
+              "-c",
+              channels,
+              "-r",
+              rate,
+              "-e",
+              encoding,
+              "-t",
+              fileType,
+              "-"
+            ], audioProcessOptions);
+          } else {
+            audioProcess = spawn("arecord", [
+              "-c",
+              channels,
+              "-r",
+              rate,
+              "-f",
+              format,
+              "-D",
+              device
+            ], audioProcessOptions);
+          }
+          audioProcess.on("exit", function(code, sig) {
+            if (code != null && sig === null) {
+              audioStream.emit("audioProcessExitComplete");
+              if (debug)
+                console.log("recording audioProcess has exited with code = %d", code);
+            }
+          });
+          audioProcess.stdout.pipe(audioStream);
+          if (debug) {
+            audioProcess.stderr.pipe(infoStream);
+          }
+          audioStream.emit("startComplete");
+        } else {
+          if (debug) {
+            throw new Error("Duplicate calls to start(): Microphone already started!");
+          }
+        }
+      };
+      that.stop = function stop() {
+        if (audioProcess != null) {
+          audioProcess.kill("SIGTERM");
+          audioProcess = null;
+          audioStream.emit("stopComplete");
+          if (debug)
+            console.log("Microhphone stopped");
+        }
+      };
+      that.pause = function pause() {
+        if (audioProcess != null) {
+          audioProcess.kill("SIGSTOP");
+          audioStream.pause();
+          audioStream.emit("pauseComplete");
+          if (debug)
+            console.log("Microphone paused");
+        }
+      };
+      that.resume = function resume() {
+        if (audioProcess != null) {
+          audioProcess.kill("SIGCONT");
+          audioStream.resume();
+          audioStream.emit("resumeComplete");
+          if (debug)
+            console.log("Microphone resumed");
+        }
+      };
+      that.getAudioStream = function getAudioStream() {
+        return audioStream;
+      };
+      if (debug) {
+        infoStream.on("data", function(data) {
+          console.log("Received Info: " + data);
+        });
+        infoStream.on("error", function(error) {
+          console.log("Error in Info Stream: " + error);
+        });
+      }
+      return that;
+    };
+    module2.exports = mic2;
+  }
+});
+
+// node_modules/mic/index.js
+var require_mic2 = __commonJS({
+  "node_modules/mic/index.js"(exports, module2) {
+    module2.exports = require_mic();
+  }
+});
+
+// node_modules/component-bind/index.js
+var require_component_bind = __commonJS({
+  "node_modules/component-bind/index.js"(exports, module2) {
+    var slice = [].slice;
+    module2.exports = function(obj, fn) {
+      if (typeof fn == "string")
+        fn = obj[fn];
+      if (typeof fn != "function")
+        throw new Error("bind() requires a function");
+      var args = slice.call(arguments, 2);
+      return function() {
+        return fn.apply(obj, args.concat(slice.call(arguments)));
+      };
+    };
+  }
+});
+
+// node_modules/socket.io-stream/lib/uuid.js
+var require_uuid = __commonJS({
+  "node_modules/socket.io-stream/lib/uuid.js"(exports, module2) {
+    function b(a) {
+      return a ? (a ^ Math.random() * 16 >> a / 4).toString(16) : ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, b);
+    }
+    module2.exports = b;
+  }
+});
+
+// node_modules/socket.io-stream/node_modules/ms/index.js
+var require_ms2 = __commonJS({
+  "node_modules/socket.io-stream/node_modules/ms/index.js"(exports, module2) {
+    var s = 1e3;
+    var m = s * 60;
+    var h = m * 60;
+    var d = h * 24;
+    var y = d * 365.25;
+    module2.exports = function(val, options) {
+      options = options || {};
+      if (typeof val == "string")
+        return parse2(val);
+      return options.long ? long(val) : short(val);
+    };
+    function parse2(str) {
+      str = "" + str;
+      if (str.length > 1e4)
+        return;
+      var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(str);
+      if (!match)
+        return;
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+      }
+    }
+    function short(ms) {
+      if (ms >= d)
+        return Math.round(ms / d) + "d";
+      if (ms >= h)
+        return Math.round(ms / h) + "h";
+      if (ms >= m)
+        return Math.round(ms / m) + "m";
+      if (ms >= s)
+        return Math.round(ms / s) + "s";
+      return ms + "ms";
+    }
+    function long(ms) {
+      return plural(ms, d, "day") || plural(ms, h, "hour") || plural(ms, m, "minute") || plural(ms, s, "second") || ms + " ms";
+    }
+    function plural(ms, n, name) {
+      if (ms < n)
+        return;
+      if (ms < n * 1.5)
+        return Math.floor(ms / n) + " " + name;
+      return Math.ceil(ms / n) + " " + name + "s";
+    }
+  }
+});
+
+// node_modules/socket.io-stream/node_modules/debug/debug.js
+var require_debug = __commonJS({
+  "node_modules/socket.io-stream/node_modules/debug/debug.js"(exports, module2) {
+    exports = module2.exports = debug;
+    exports.coerce = coerce;
+    exports.disable = disable;
+    exports.enable = enable;
+    exports.enabled = enabled;
+    exports.humanize = require_ms2();
+    exports.names = [];
+    exports.skips = [];
+    exports.formatters = {};
+    var prevColor = 0;
+    var prevTime;
+    function selectColor() {
+      return exports.colors[prevColor++ % exports.colors.length];
+    }
+    function debug(namespace) {
+      function disabled() {
+      }
+      disabled.enabled = false;
+      function enabled2() {
+        var self2 = enabled2;
+        var curr = +new Date();
+        var ms = curr - (prevTime || curr);
+        self2.diff = ms;
+        self2.prev = prevTime;
+        self2.curr = curr;
+        prevTime = curr;
+        if (self2.useColors == null)
+          self2.useColors = exports.useColors();
+        if (self2.color == null && self2.useColors)
+          self2.color = selectColor();
+        var args = Array.prototype.slice.call(arguments);
+        args[0] = exports.coerce(args[0]);
+        if (typeof args[0] !== "string") {
+          args = ["%o"].concat(args);
+        }
+        var index = 0;
+        args[0] = args[0].replace(/%([a-z%])/g, function(match, format) {
+          if (match === "%%")
+            return match;
+          index++;
+          var formatter = exports.formatters[format];
+          if (typeof formatter === "function") {
+            var val = args[index];
+            match = formatter.call(self2, val);
+            args.splice(index, 1);
+            index--;
+          }
+          return match;
+        });
+        if (typeof exports.formatArgs === "function") {
+          args = exports.formatArgs.apply(self2, args);
+        }
+        var logFn = enabled2.log || exports.log || console.log.bind(console);
+        logFn.apply(self2, args);
+      }
+      enabled2.enabled = true;
+      var fn = exports.enabled(namespace) ? enabled2 : disabled;
+      fn.namespace = namespace;
+      return fn;
+    }
+    function enable(namespaces) {
+      exports.save(namespaces);
+      var split = (namespaces || "").split(/[\s,]+/);
+      var len = split.length;
+      for (var i = 0; i < len; i++) {
+        if (!split[i])
+          continue;
+        namespaces = split[i].replace(/\*/g, ".*?");
+        if (namespaces[0] === "-") {
+          exports.skips.push(new RegExp("^" + namespaces.substr(1) + "$"));
+        } else {
+          exports.names.push(new RegExp("^" + namespaces + "$"));
+        }
+      }
+    }
+    function disable() {
+      exports.enable("");
+    }
+    function enabled(name) {
+      var i, len;
+      for (i = 0, len = exports.skips.length; i < len; i++) {
+        if (exports.skips[i].test(name)) {
+          return false;
+        }
+      }
+      for (i = 0, len = exports.names.length; i < len; i++) {
+        if (exports.names[i].test(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function coerce(val) {
+      if (val instanceof Error)
+        return val.stack || val.message;
+      return val;
+    }
+  }
+});
+
+// node_modules/socket.io-stream/node_modules/debug/node.js
+var require_node2 = __commonJS({
+  "node_modules/socket.io-stream/node_modules/debug/node.js"(exports, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports = module2.exports = require_debug();
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.colors = [6, 2, 3, 4, 5, 1];
+    var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+    var stream = fd === 1 ? process.stdout : fd === 2 ? process.stderr : createWritableStdioStream(fd);
+    function useColors() {
+      var debugColors = (process.env.DEBUG_COLORS || "").trim().toLowerCase();
+      if (debugColors.length === 0) {
+        return tty.isatty(fd);
+      } else {
+        return debugColors !== "0" && debugColors !== "no" && debugColors !== "false" && debugColors !== "disabled";
+      }
+    }
+    var inspect = util.inspect.length === 4 ? function(v, colors) {
+      return util.inspect(v, void 0, void 0, colors);
+    } : function(v, colors) {
+      return util.inspect(v, { colors });
+    };
+    exports.formatters.o = function(v) {
+      return inspect(v, this.useColors).replace(/\s*\n\s*/g, " ");
+    };
+    function formatArgs() {
+      var args = arguments;
+      var useColors2 = this.useColors;
+      var name = this.namespace;
+      if (useColors2) {
+        var c = this.color;
+        args[0] = "  [3" + c + ";1m" + name + " [0m" + args[0] + "[3" + c + "m +" + exports.humanize(this.diff) + "[0m";
+      } else {
+        args[0] = new Date().toUTCString() + " " + name + " " + args[0];
+      }
+      return args;
+    }
+    function log() {
+      return stream.write(util.format.apply(this, arguments) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces == null) {
+        delete process.env.DEBUG;
+      } else {
+        process.env.DEBUG = namespaces;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function createWritableStdioStream(fd2) {
+      var stream2;
+      var tty_wrap = process.binding("tty_wrap");
+      switch (tty_wrap.guessHandleType(fd2)) {
+        case "TTY":
+          stream2 = new tty.WriteStream(fd2);
+          stream2._type = "tty";
+          if (stream2._handle && stream2._handle.unref) {
+            stream2._handle.unref();
+          }
+          break;
+        case "FILE":
+          var fs2 = require("fs");
+          stream2 = new fs2.SyncWriteStream(fd2, { autoClose: false });
+          stream2._type = "fs";
+          break;
+        case "PIPE":
+        case "TCP":
+          var net = require("net");
+          stream2 = new net.Socket({
+            fd: fd2,
+            readable: false,
+            writable: true
+          });
+          stream2.readable = false;
+          stream2.read = null;
+          stream2._type = "pipe";
+          if (stream2._handle && stream2._handle.unref) {
+            stream2._handle.unref();
+          }
+          break;
+        default:
+          throw new Error("Implement me. Unknown stream file type!");
+      }
+      stream2.fd = fd2;
+      stream2._isStdio = true;
+      return stream2;
+    }
+    exports.enable(load());
+  }
+});
+
+// node_modules/socket.io-stream/lib/iostream.js
+var require_iostream = __commonJS({
+  "node_modules/socket.io-stream/lib/iostream.js"(exports, module2) {
+    var util = require("util");
+    var Duplex = require("stream").Duplex;
+    var bind = require_component_bind();
+    var uuid = require_uuid();
+    var debug = require_node2()("socket.io-stream:iostream");
+    module2.exports = IOStream;
+    util.inherits(IOStream, Duplex);
+    function IOStream(options) {
+      if (!(this instanceof IOStream)) {
+        return new IOStream(options);
+      }
+      IOStream.super_.call(this, options);
+      this.options = options;
+      this.id = uuid();
+      this.socket = null;
+      this.pushBuffer = [];
+      this.writeBuffer = [];
+      this._readable = false;
+      this._writable = false;
+      this.destroyed = false;
+      this.allowHalfOpen = options && options.allowHalfOpen || false;
+      this.on("finish", this._onfinish);
+      this.on("end", this._onend);
+      this.on("error", this._onerror);
+    }
+    IOStream.prototype.destroy = function() {
+      debug("destroy");
+      if (this.destroyed) {
+        debug("already destroyed");
+        return;
+      }
+      this.readable = this.writable = false;
+      if (this.socket) {
+        debug("clean up");
+        this.socket.cleanup(this.id);
+        this.socket = null;
+      }
+      this.destroyed = true;
+    };
+    IOStream.prototype._read = function(size) {
+      var push;
+      if (this.destroyed)
+        return;
+      if (this.pushBuffer.length) {
+        while (push = this.pushBuffer.shift()) {
+          if (!push())
+            break;
+        }
+        return;
+      }
+      this._readable = true;
+      this.socket._read(this.id, size);
+    };
+    IOStream.prototype._onread = function(size) {
+      var write = this.writeBuffer.shift();
+      if (write)
+        return write();
+      this._writable = true;
+    };
+    IOStream.prototype._write = function(chunk, encoding, callback) {
+      var self2 = this;
+      function write() {
+        if (self2.destroyed)
+          return;
+        self2._writable = false;
+        self2.socket._write(self2.id, chunk, encoding, callback);
+      }
+      if (this._writable) {
+        write();
+      } else {
+        this.writeBuffer.push(write);
+      }
+    };
+    IOStream.prototype._onwrite = function(chunk, encoding, callback) {
+      var self2 = this;
+      function push() {
+        self2._readable = false;
+        var ret = self2.push(chunk || "", encoding);
+        callback();
+        return ret;
+      }
+      if (this._readable) {
+        push();
+      } else {
+        this.pushBuffer.push(push);
+      }
+    };
+    IOStream.prototype._end = function() {
+      if (this.pushBuffer.length) {
+        this.pushBuffer.push(bind(this, "_done"));
+      } else {
+        this._done();
+      }
+    };
+    IOStream.prototype._done = function() {
+      this._readable = false;
+      return this.push(null);
+    };
+    IOStream.prototype._onfinish = function() {
+      debug("_onfinish");
+      if (this.socket) {
+        this.socket._end(this.id);
+      }
+      this.writable = false;
+      this._writableState.ended = true;
+      if (!this.readable || this._readableState.ended) {
+        debug("_onfinish: ended, destroy %s", this._readableState);
+        return this.destroy();
+      }
+      debug("_onfinish: not ended");
+      if (!this.allowHalfOpen) {
+        this.push(null);
+        if (this.readable && !this._readableState.endEmitted) {
+          this.read(0);
+        }
+      }
+    };
+    IOStream.prototype._onend = function() {
+      debug("_onend");
+      this.readable = false;
+      this._readableState.ended = true;
+      if (!this.writable || this._writableState.finished) {
+        debug("_onend: %s", this._writableState);
+        return this.destroy();
+      }
+      debug("_onend: not finished");
+      if (!this.allowHalfOpen) {
+        this.end();
+      }
+    };
+    IOStream.prototype._onerror = function(err) {
+      if (!err.remote && this.socket) {
+        this.socket._error(this.id, err);
+      }
+      this.destroy();
+    };
+  }
+});
+
+// node_modules/socket.io-stream/lib/parser.js
+var require_parser = __commonJS({
+  "node_modules/socket.io-stream/lib/parser.js"(exports) {
+    var util = require("util");
+    var EventEmitter = require("events").EventEmitter;
+    var IOStream = require_iostream();
+    var slice = Array.prototype.slice;
+    exports.Encoder = Encoder;
+    exports.Decoder = Decoder;
+    util.inherits(Encoder, EventEmitter);
+    function Encoder() {
+      EventEmitter.call(this);
+    }
+    Encoder.prototype.encode = function(v) {
+      if (v instanceof IOStream) {
+        return this.encodeStream(v);
+      } else if (util.isArray(v)) {
+        return this.encodeArray(v);
+      } else if (v && typeof v == "object") {
+        return this.encodeObject(v);
+      }
+      return v;
+    };
+    Encoder.prototype.encodeStream = function(stream) {
+      this.emit("stream", stream);
+      var v = { $stream: stream.id };
+      if (stream.options) {
+        v.options = stream.options;
+      }
+      return v;
+    };
+    Encoder.prototype.encodeArray = function(arr) {
+      var v = [];
+      for (var i = 0, len = arr.length; i < len; i++) {
+        v.push(this.encode(arr[i]));
+      }
+      return v;
+    };
+    Encoder.prototype.encodeObject = function(obj) {
+      var v = {};
+      for (var k in obj) {
+        if (obj.hasOwnProperty(k)) {
+          v[k] = this.encode(obj[k]);
+        }
+      }
+      return v;
+    };
+    util.inherits(Decoder, EventEmitter);
+    function Decoder() {
+      EventEmitter.call(this);
+    }
+    Decoder.prototype.decode = function(v) {
+      if (v && v.$stream) {
+        return this.decodeStream(v);
+      } else if (util.isArray(v)) {
+        return this.decodeArray(v);
+      } else if (v && typeof v == "object") {
+        return this.decodeObject(v);
+      }
+      return v;
+    };
+    Decoder.prototype.decodeStream = function(obj) {
+      var stream = new IOStream(obj.options);
+      stream.id = obj.$stream;
+      this.emit("stream", stream);
+      return stream;
+    };
+    Decoder.prototype.decodeArray = function(arr) {
+      var v = [];
+      for (var i = 0, len = arr.length; i < len; i++) {
+        v.push(this.decode(arr[i]));
+      }
+      return v;
+    };
+    Decoder.prototype.decodeObject = function(obj) {
+      var v = {};
+      for (var k in obj) {
+        if (obj.hasOwnProperty(k)) {
+          v[k] = this.decode(obj[k]);
+        }
+      }
+      return v;
+    };
+  }
+});
+
+// node_modules/socket.io-stream/lib/socket.js
+var require_socket3 = __commonJS({
+  "node_modules/socket.io-stream/lib/socket.js"(exports, module2) {
+    var util = require("util");
+    var EventEmitter = require("events").EventEmitter;
+    var bind = require_component_bind();
+    var IOStream = require_iostream();
+    var parser = require_parser();
+    var debug = require_node2()("socket.io-stream:socket");
+    var emit = EventEmitter.prototype.emit;
+    var on = EventEmitter.prototype.on;
+    var slice = Array.prototype.slice;
+    exports = module2.exports = Socket2;
+    exports.event = "$stream";
+    exports.events = [
+      "error",
+      "newListener",
+      "removeListener"
+    ];
+    util.inherits(Socket2, EventEmitter);
+    function Socket2(sio, options) {
+      if (!(this instanceof Socket2)) {
+        return new Socket2(sio, options);
+      }
+      EventEmitter.call(this);
+      options = options || {};
+      this.sio = sio;
+      this.forceBase64 = !!options.forceBase64;
+      this.streams = {};
+      this.encoder = new parser.Encoder();
+      this.decoder = new parser.Decoder();
+      var eventName = exports.event;
+      sio.on(eventName, bind(this, emit));
+      sio.on(eventName + "-read", bind(this, "_onread"));
+      sio.on(eventName + "-write", bind(this, "_onwrite"));
+      sio.on(eventName + "-end", bind(this, "_onend"));
+      sio.on(eventName + "-error", bind(this, "_onerror"));
+      sio.on("error", bind(this, emit, "error"));
+      sio.on("disconnect", bind(this, "_ondisconnect"));
+      this.encoder.on("stream", bind(this, "_onencode"));
+      this.decoder.on("stream", bind(this, "_ondecode"));
+    }
+    Socket2.prototype.$emit = emit;
+    Socket2.prototype.emit = function(type) {
+      if (~exports.events.indexOf(type)) {
+        return emit.apply(this, arguments);
+      }
+      this._stream.apply(this, arguments);
+      return this;
+    };
+    Socket2.prototype.on = function(type, listener) {
+      if (~exports.events.indexOf(type)) {
+        return on.apply(this, arguments);
+      }
+      this._onstream(type, listener);
+      return this;
+    };
+    Socket2.prototype._stream = function(type) {
+      debug("sending new streams");
+      var self2 = this;
+      var args = slice.call(arguments, 1);
+      var ack = args[args.length - 1];
+      if (typeof ack == "function") {
+        args[args.length - 1] = function() {
+          var args2 = slice.call(arguments);
+          args2 = self2.decoder.decode(args2);
+          ack.apply(this, args2);
+        };
+      }
+      args = this.encoder.encode(args);
+      var sio = this.sio;
+      sio.emit.apply(sio, [exports.event, type].concat(args));
+    };
+    Socket2.prototype._read = function(id, size) {
+      this.sio.emit(exports.event + "-read", id, size);
+    };
+    Socket2.prototype._write = function(id, chunk, encoding, callback) {
+      if (Buffer.isBuffer(chunk)) {
+        if (this.forceBase64) {
+          encoding = "base64";
+          chunk = chunk.toString(encoding);
+        } else if (!global.Buffer) {
+          if (chunk.toArrayBuffer) {
+            chunk = chunk.toArrayBuffer();
+          } else {
+            chunk = chunk.buffer;
+          }
+        }
+      }
+      this.sio.emit(exports.event + "-write", id, chunk, encoding, callback);
+    };
+    Socket2.prototype._end = function(id) {
+      this.sio.emit(exports.event + "-end", id);
+    };
+    Socket2.prototype._error = function(id, err) {
+      this.sio.emit(exports.event + "-error", id, err.message || err);
+    };
+    Socket2.prototype._onstream = function(type, listener) {
+      if (typeof listener != "function") {
+        throw TypeError("listener must be a function");
+      }
+      function onstream() {
+        debug("new streams");
+        var self2 = this;
+        var args = slice.call(arguments);
+        var ack = args[args.length - 1];
+        if (typeof ack == "function") {
+          args[args.length - 1] = function() {
+            var args2 = slice.call(arguments);
+            args2 = self2.encoder.encode(args2);
+            ack.apply(this, args2);
+          };
+        }
+        args = this.decoder.decode(args);
+        listener.apply(this, args);
+      }
+      onstream.listener = listener;
+      on.call(this, type, onstream);
+    };
+    Socket2.prototype._onread = function(id, size) {
+      debug('read: "%s"', id);
+      var stream = this.streams[id];
+      if (stream) {
+        stream._onread(size);
+      } else {
+        debug("ignore invalid stream id");
+      }
+    };
+    Socket2.prototype._onwrite = function(id, chunk, encoding, callback) {
+      debug('write: "%s"', id);
+      var stream = this.streams[id];
+      if (!stream) {
+        callback("invalid stream id: " + id);
+        return;
+      }
+      if (global.ArrayBuffer && chunk instanceof ArrayBuffer) {
+        chunk = new Buffer(new Uint8Array(chunk));
+      }
+      stream._onwrite(chunk, encoding, callback);
+    };
+    Socket2.prototype._onend = function(id) {
+      debug('end: "%s"', id);
+      var stream = this.streams[id];
+      if (!stream) {
+        debug('ignore non-existent stream id: "%s"', id);
+        return;
+      }
+      stream._end();
+    };
+    Socket2.prototype._onerror = function(id, message) {
+      debug('error: "%s", "%s"', id, message);
+      var stream = this.streams[id];
+      if (!stream) {
+        debug('invalid stream id: "%s"', id);
+        return;
+      }
+      var err = new Error(message);
+      err.remote = true;
+      stream.emit("error", err);
+    };
+    Socket2.prototype._ondisconnect = function() {
+      var stream;
+      for (var id in this.streams) {
+        stream = this.streams[id];
+        stream.destroy();
+        stream.emit("close");
+        stream.emit("error", new Error("Connection aborted"));
+      }
+    };
+    Socket2.prototype._onencode = function(stream) {
+      if (stream.socket || stream.destroyed) {
+        throw new Error("stream has already been sent.");
+      }
+      var id = stream.id;
+      if (this.streams[id]) {
+        throw new Error("Encoded stream already exists: " + id);
+      }
+      this.streams[id] = stream;
+      stream.socket = this;
+    };
+    Socket2.prototype._ondecode = function(stream) {
+      var id = stream.id;
+      if (this.streams[id]) {
+        this._error(id, new Error("Decoded stream already exists: " + id));
+        return;
+      }
+      this.streams[id] = stream;
+      stream.socket = this;
+    };
+    Socket2.prototype.cleanup = function(id) {
+      delete this.streams[id];
+    };
+  }
+});
+
+// node_modules/socket.io-stream/lib/blob-read-stream.js
+var require_blob_read_stream = __commonJS({
+  "node_modules/socket.io-stream/lib/blob-read-stream.js"(exports, module2) {
+    var util = require("util");
+    var Readable = require("stream").Readable;
+    var bind = require_component_bind();
+    module2.exports = BlobReadStream;
+    util.inherits(BlobReadStream, Readable);
+    function BlobReadStream(blob, options) {
+      if (!(this instanceof BlobReadStream)) {
+        return new BlobReadStream(blob, options);
+      }
+      Readable.call(this, options);
+      options = options || {};
+      this.blob = blob;
+      this.slice = blob.slice || blob.webkitSlice || blob.mozSlice;
+      this.start = 0;
+      this.sync = options.synchronous || false;
+      var fileReader;
+      if (options.synchronous) {
+        fileReader = this.fileReader = new FileReaderSync();
+      } else {
+        fileReader = this.fileReader = new FileReader();
+      }
+      fileReader.onload = bind(this, "_onload");
+      fileReader.onerror = bind(this, "_onerror");
+    }
+    BlobReadStream.prototype._read = function(size) {
+      var start = this.start;
+      var end = this.start = this.start + size;
+      var chunk = this.slice.call(this.blob, start, end);
+      if (chunk.size) {
+        if (this.sync) {
+          var bufferChunk = new Buffer(new Uint8Array(this.fileReader.readAsArrayBuffer(chunk)));
+          this.push(bufferChunk);
+        } else {
+          this.fileReader.readAsArrayBuffer(chunk);
+        }
+      } else {
+        this.push(null);
+      }
+    };
+    BlobReadStream.prototype._onload = function(e) {
+      var chunk = new Buffer(new Uint8Array(e.target.result));
+      this.push(chunk);
+    };
+    BlobReadStream.prototype._onerror = function(e) {
+      var err = e.target.error;
+      this.emit("error", err);
+    };
+  }
+});
+
+// node_modules/socket.io-stream/lib/index.js
+var require_lib3 = __commonJS({
+  "node_modules/socket.io-stream/lib/index.js"(exports, module2) {
+    var Socket2 = require_socket3();
+    var IOStream = require_iostream();
+    var BlobReadStream = require_blob_read_stream();
+    exports = module2.exports = lookup;
+    exports.Buffer = Buffer;
+    exports.Socket = Socket2;
+    exports.IOStream = IOStream;
+    exports.forceBase64 = false;
+    function lookup(sio, options) {
+      options = options || {};
+      if (options.forceBase64 == null) {
+        options.forceBase64 = exports.forceBase64;
+      }
+      if (!sio._streamSocket) {
+        sio._streamSocket = new Socket2(sio, options);
+      }
+      return sio._streamSocket;
+    }
+    exports.createStream = function(options) {
+      return new IOStream(options);
+    };
+    exports.createBlobReadStream = function(blob, options) {
+      return new BlobReadStream(blob, options);
+    };
+  }
+});
+
+// node_modules/socket.io-stream/index.js
+var require_socket4 = __commonJS({
+  "node_modules/socket.io-stream/index.js"(exports, module2) {
+    module2.exports = require_lib3();
+  }
+});
+
 // node_modules/is-docker/index.js
 var require_is_docker = __commonJS({
   "node_modules/is-docker/index.js"(exports, module2) {
@@ -15404,13 +16465,15 @@ function disableChat(val) {
 }
 
 // src/pages/2-ChannelList.ts
+var import_mic = __toModule(require_mic2());
+var import_socket = __toModule(require_socket4());
 var ciMap = {};
 var page2 = {
   text: `Press a key to view/join a channel below.
      Or press CTRL+C to go back.`,
   title: `Channel List - ${config_default.productName}`,
   onload: () => {
-    let channels = serverman.server.channels.filter((c) => c.type == "GUILD_TEXT" || c.type == "GUILD_NEWS");
+    let channels = serverman.server.channels.filter((c) => c.type == "text" || c.type == "news");
     let ci = 0;
     let category = "";
     ciMap = {};
@@ -15426,7 +16489,7 @@ ${category}`);
       ciMap[config_default.keyListMap[ci]] = c.id;
       ci++;
     });
-    channels = serverman.server.channels.filter((c) => c.type == "GUILD_VOICE");
+    channels = serverman.server.channels.filter((c) => c.type == "voice");
     category = "";
     channels.sort((c1, c2) => {
       return c1.rawPosition > c2.rawPosition ? 1 : -1;
@@ -15445,18 +16508,37 @@ ${category}`);
       return loadPage(0);
     if (ciMap[k]) {
       channelman.data(serverman.server.channels.find((c) => c.id == ciMap[k]));
-      if (channelman.channel.type == "GUILD_VOICE")
-        return;
-      if (!channelman.channel.canSend) {
-        disableChat(true);
-        messageman.set("READ ONLY");
+      if (channelman.channel.type == "voice") {
+        socketman.socket.emit("joinVoice", channelman.channel.id);
+        socketman.socket.once("joinedVoice", () => {
+          let micInstance = (0, import_mic.default)({
+            rate: "16000",
+            channels: "1",
+            debug: true,
+            exitOnSilence: 6,
+            fileType: "raw"
+          });
+          let micInputStream = micInstance.getAudioStream();
+          let voiceStream = import_socket.default.createStream({});
+          micInputStream.pipe(voiceStream);
+          (0, import_socket.default)(socketman.socket, {}).emit("voiceStream", voiceStream);
+          micInputStream.on("processExitComplete", function() {
+            console.log("Got SIGNAL processExitComplete");
+          });
+          micInstance.start();
+        });
       } else {
-        disableChat(false);
-        messageman.set("");
-        historyman.reset();
+        if (!channelman.channel.canSend) {
+          disableChat(true);
+          messageman.set("READ ONLY");
+        } else {
+          disableChat(false);
+          messageman.set("");
+          historyman.reset();
+        }
+        scrollman.reset();
+        loadPage(3);
       }
-      scrollman.reset();
-      loadPage(3);
     }
   }
 };
@@ -15906,9 +16988,8 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
     console.clear();
     console.log("Connected to proxy server.");
     process.stdin.setMaxListeners(Infinity);
-    console.log("Checking for updates...");
-    fetch("http://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION").then(async (hasVersion) => {
-      if (VERSION < Number(await hasVersion.text()))
+    function continu(hasVersion) {
+      if (VERSION < Number(hasVersion))
         outdated = true;
       let hexKey = "";
       socket.on("botready", (bot) => {
@@ -15961,9 +17042,16 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})
       });
       console.log("Logging in...");
       socket.emit("login", TOKEN);
+    }
+    console.log("Checking for updates...");
+    fetch("http://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION").then(async (hasVersion) => {
+      continu(await hasVersion.text());
     }).catch((err) => {
       console.log("Failed version check.");
       console.log(err);
+      setTimeout(function() {
+        continu(0);
+      }, 2e3);
     });
   });
   process.stdin.setRawMode(true);

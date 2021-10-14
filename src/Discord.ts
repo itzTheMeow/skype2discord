@@ -1,13 +1,4 @@
-type ChannelTypes =
-  | "GUILD_TEXT"
-  | "GUILD_VOICE"
-  | "GUILD_CATEGORY"
-  | "GUILD_NEWS"
-  | "GUILD_STORE"
-  | "GUILD_NEWS_THREAD"
-  | "GUILD_PUBLIC_THREAD"
-  | "GUILD_PRIVATE_THREAD"
-  | "GUILD_STAGE_VOICE";
+type ChannelTypes = "text" | "voice" | "category" | "news";
 
 export interface User {
   id: string;

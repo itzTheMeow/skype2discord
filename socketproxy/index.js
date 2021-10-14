@@ -1,6 +1,7 @@
 const express = require("express");
 const app = express();
 const server = require("http").createServer(app);
+const prism = require("prism-media");
 
 app.use(express.static("public"));
 
@@ -15,7 +16,6 @@ const listener = server.listen(6001, function () {
 const io = require("socket.io")(server);
 const iostream = require("socket.io-stream");
 const Discord = require("discord.js");
-const DiscordVoice = require("@discordjs/voice");
 
 let clients = {};
 
@@ -23,6 +23,7 @@ io.on("connection", async (socket) => {
   console.log("Socket connected!");
   socket.on("login", (d) => {
     let guild;
+    let voiceConn;
     let bot = new Discord.Client({
       intents: Object.values(Discord.Intents.FLAGS), // fuck you discord lmao
     });
@@ -176,9 +177,33 @@ io.on("connection", async (socket) => {
       (await bot.channels.cache.get(id)?.send("$TDSClient.stopTypingEventTrigger"))?.delete();
     });
 
-    socket.on("joinVoice", (id) => {
-      bot.channels.cache.get(id)?.socket.emit("joinedVoice");
+    socket.on("joinVoice", async (id) => {
+      voiceConn = await bot.channels.cache.get(id)?.join();
+      socket.emit("joinedVoice");
     });
-    iostream(socket).on("voiceStream", (stream) => {});
+    iostream(socket).on("voiceStream", (stream) => {
+      if (voiceConn) {
+        const transcoder = new prism.FFmpeg({
+          args: [
+            "-analyzeduration",
+            "0",
+            "-loglevel",
+            "0",
+            "-f",
+            "s16le",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+          ],
+        });
+        const opus = new prism.opus.Encoder({ rate: 16000, channels: 1, frameSize: 960 });
+
+        stream.pipe(transcoder).pipe(opus);
+        voiceConn.play(opus, {
+          type: "opus",
+        });
+      }
+    });
   });
 });

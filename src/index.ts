@@ -2,6 +2,7 @@ import fs from "fs";
 import rl from "readline";
 import io from "socket.io-client";
 import fetch from "node-fetch";
+import mic from "mic";
 
 import setTitle from "./util/setTitle";
 import config from "./config";
@@ -60,82 +61,89 @@ inter.question(`Enter proxy URL or press enter to use current. (${PROXY})\n> `, 
 
     process.stdin.setMaxListeners(Infinity);
 
+    function continu(hasVersion: number | string) {
+      if (VERSION < Number(hasVersion)) outdated = true;
+
+      let hexKey = "";
+
+      socket.on("botready", (bot) => {
+        console.log(`${bot.tag} is online!`);
+        console.log("Getting main guild...");
+        socket.emit("guild", config.guild);
+
+        socket.once("doneguild", (s) => {
+          serverman.data(s);
+
+          process.stdin.on("keypress", (k) => {
+            if (!hexMode) {
+              press(k);
+              hexKey = "";
+              return;
+            }
+            hexKey += k;
+            if (hexKey.length >= 2) {
+              if (
+                (hexKey.startsWith("1b") ||
+                  hexKey.startsWith("1b5") ||
+                  hexKey.startsWith("1b5b")) &&
+                !hexKey.endsWith("7e") &&
+                !hexKey.endsWith("41") &&
+                !hexKey.endsWith("42") &&
+                !hexKey.endsWith("43") &&
+                !hexKey.endsWith("44") &&
+                hexKey.length < 8
+              )
+                return;
+              press(hexKey);
+              hexKey = "";
+            }
+          });
+
+          loadPage(0);
+        });
+
+        socket.on("messageCreate", async (message) => {
+          if (!message.content || !message.guild || !serverman.server?.channels) return;
+          let ind = serverman.server.channels.indexOf(
+            serverman.server.channels.find((c) => c.id == message.channel.id)
+          );
+          (serverman.server.channels[ind] as TextChannel).messages.push(message);
+          if (message.author.id == bot.id) scrollman.reset();
+          loadPage(3);
+
+          if (message.author.bot || !message.content.startsWith(config.prefix)) return;
+
+          let args = message.content.substring(config.prefix.length).split(" ");
+          let command = args.shift();
+
+          switch (command) {
+            case "xd":
+              socket.emit("sendMessage", message.channel.id, "xd");
+              break;
+          }
+        });
+        socket.on("messageUpdate", async (message) => {
+          if (!message.content || !message.guild || !serverman.server?.channels) return;
+          await fetchMessages(message.channel.id);
+          if (channelman.channel.id == message.channel.id && pageNum == 3) loadPage(3);
+        });
+      });
+
+      console.log("Logging in...");
+      socket.emit("login", TOKEN);
+    }
+
     console.log("Checking for updates...");
     fetch("http://raw.githubusercontent.com/itzTheMeow/tdsclient/master/VERSION")
       .then(async (hasVersion) => {
-        if (VERSION < Number(await hasVersion.text())) outdated = true;
-
-        let hexKey = "";
-
-        socket.on("botready", (bot) => {
-          console.log(`${bot.tag} is online!`);
-          console.log("Getting main guild...");
-          socket.emit("guild", config.guild);
-
-          socket.once("doneguild", (s) => {
-            serverman.data(s);
-
-            process.stdin.on("keypress", (k) => {
-              if (!hexMode) {
-                press(k);
-                hexKey = "";
-                return;
-              }
-              hexKey += k;
-              if (hexKey.length >= 2) {
-                if (
-                  (hexKey.startsWith("1b") ||
-                    hexKey.startsWith("1b5") ||
-                    hexKey.startsWith("1b5b")) &&
-                  !hexKey.endsWith("7e") &&
-                  !hexKey.endsWith("41") &&
-                  !hexKey.endsWith("42") &&
-                  !hexKey.endsWith("43") &&
-                  !hexKey.endsWith("44") &&
-                  hexKey.length < 8
-                )
-                  return;
-                press(hexKey);
-                hexKey = "";
-              }
-            });
-
-            loadPage(0);
-          });
-
-          socket.on("messageCreate", async (message) => {
-            if (!message.content || !message.guild || !serverman.server?.channels) return;
-            let ind = serverman.server.channels.indexOf(
-              serverman.server.channels.find((c) => c.id == message.channel.id)
-            );
-            (serverman.server.channels[ind] as TextChannel).messages.push(message);
-            if (message.author.id == bot.id) scrollman.reset();
-            loadPage(3);
-
-            if (message.author.bot || !message.content.startsWith(config.prefix)) return;
-
-            let args = message.content.substring(config.prefix.length).split(" ");
-            let command = args.shift();
-
-            switch (command) {
-              case "xd":
-                socket.emit("sendMessage", message.channel.id, "xd");
-                break;
-            }
-          });
-          socket.on("messageUpdate", async (message) => {
-            if (!message.content || !message.guild || !serverman.server?.channels) return;
-            await fetchMessages(message.channel.id);
-            if (channelman.channel.id == message.channel.id && pageNum == 3) loadPage(3);
-          });
-        });
-
-        console.log("Logging in...");
-        socket.emit("login", TOKEN);
+        continu(await hasVersion.text());
       })
       .catch((err) => {
         console.log("Failed version check.");
         console.log(err);
+        setTimeout(function () {
+          continu(0);
+        }, 2000);
       });
   });
 

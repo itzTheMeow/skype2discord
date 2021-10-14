@@ -1,7 +1,10 @@
-import { channelman, historyman, messageman, scrollman, serverman } from "..";
+import { channelman, historyman, messageman, scrollman, serverman, socketman } from "..";
 import config from "../config";
 import { loadPage } from "../loadPage";
 import { disableChat } from "../util/chatDisabled";
+import fs from "fs";
+import mic from "mic";
+import socketstream from "socket.io-stream";
 
 let ciMap = {};
 
@@ -10,9 +13,7 @@ const page2 = {
      Or press CTRL+C to go back.`,
   title: `Channel List - ${config.productName}`,
   onload: () => {
-    let channels = serverman.server.channels.filter(
-      (c) => c.type == "GUILD_TEXT" || c.type == "GUILD_NEWS"
-    );
+    let channels = serverman.server.channels.filter((c) => c.type == "text" || c.type == "news");
     let ci = 0;
     let category = "";
     ciMap = {};
@@ -31,7 +32,7 @@ const page2 = {
         ci++;
       });
 
-    channels = serverman.server.channels.filter((c) => c.type == "GUILD_VOICE");
+    channels = serverman.server.channels.filter((c) => c.type == "voice");
     category = "";
 
     channels
@@ -52,17 +53,40 @@ const page2 = {
     if (k == "\x03") return loadPage(0);
     if (ciMap[k]) {
       channelman.data(serverman.server.channels.find((c) => c.id == ciMap[k]));
-      if (channelman.channel.type == "GUILD_VOICE") return;
-      if (!channelman.channel.canSend) {
-        disableChat(true);
-        messageman.set("READ ONLY");
+      if (channelman.channel.type == "voice") {
+        socketman.socket.emit("joinVoice", channelman.channel.id);
+        socketman.socket.once("joinedVoice", () => {
+          let micInstance = mic({
+            rate: "16000",
+            channels: "1",
+            debug: true,
+            exitOnSilence: 6,
+            fileType: "raw",
+          });
+          let micInputStream = micInstance.getAudioStream();
+          let voiceStream = socketstream.createStream({});
+
+          micInputStream.pipe(voiceStream);
+          socketstream(socketman.socket, {}).emit("voiceStream", voiceStream);
+
+          micInputStream.on("processExitComplete", function () {
+            console.log("Got SIGNAL processExitComplete");
+          });
+
+          micInstance.start();
+        });
       } else {
-        disableChat(false);
-        messageman.set("");
-        historyman.reset();
+        if (!channelman.channel.canSend) {
+          disableChat(true);
+          messageman.set("READ ONLY");
+        } else {
+          disableChat(false);
+          messageman.set("");
+          historyman.reset();
+        }
+        scrollman.reset();
+        loadPage(3);
       }
-      scrollman.reset();
-      loadPage(3);
     }
   },
 };

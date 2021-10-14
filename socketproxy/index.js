@@ -171,7 +171,7 @@ io.on("connection", async (socket) => {
       guild.me.setNickname(name);
     });
     socket.on("type", (id) => {
-      if (bot.channels.cache.get(id)?.type != "voice") bot.channels.cache.get(id)?.sendTyping();
+      if (bot.channels.cache.get(id)?.type != "voice") bot.channels.cache.get(id)?.sendTyping?.();
     });
     socket.on("stopType", async (id) => {
       if (bot.channels.cache.get(id)?.type != "voice")

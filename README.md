@@ -1,5 +1,11 @@
 # TDSClient - A terminal-based discord client for school computers.
 
+*This project has been abandoned. It will likely stop working when discord updates their API.*
+
+If you want a similar client, try out [CLIvite](https://github.com/itzTheMeow/revolt-clivite) for revolt.
+
+<br><br>
+
 If you want to use discord on your school computer without it being blocked, this is the tool for you.
 
 This client utilizes a BOT TOKEN (get it from a friend or on another pc) and connects using a proxy.
